@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="ZaSparkProject:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/ZaSparkProject_jar</output-path>
+    <root id="archive" name="ZaSparkProject.jar">
+      <element id="module-output" name="ZaSparkProject" />
+    </root>
+  </artifact>
+</component>
