@@ -1,28 +1,29 @@
 package com.za.apps.recommend
 
+import com.za.apps.recommend.MovieLensModel.dataPath
 import org.apache.spark.mllib.evaluation.RegressionMetrics
 import org.apache.spark.mllib.recommendation.{ALS, Rating}
 import org.apache.spark.{SparkConf, SparkContext}
 
-object MovieLensModel {
+object MovieLensModelImplicit {
   val dataPath = "D:\\workspace\\SparkProject\\data\\ml-100k\\"
 
   def main(args: Array[String]): Unit = {
     System.setProperty("hadoop.home.dir", "D:\\服务器管理\\平台软件\\hadoop-2.6.4\\hadoop-2.6.4")
 
-    val conf = new SparkConf().setMaster("local[*]").setAppName("MovieLensModel").set("spark.executor.memory", "4g")
+    val conf = new SparkConf().setMaster("local[*]").setAppName("MovieLensModelImplicit").set("spark.executor.memory", "4g")
     val sc = new SparkContext(conf)
     sc.setLogLevel("ERROR")
 
     //rating_data
     val rating_data = sc.textFile(dataPath + "u.data").map(_.split("\t").take(3))
     val ratings = rating_data.map {
-      case Array(user, movie, rating) => Rating(user.toInt, movie.toInt, rating.toDouble)
+      case Array(user, movie, rating) => {
+        Rating(user.toInt, movie.toInt, if (rating.toDouble-2.5>0) rating.toDouble-2.5 else 0)
+      }
     }
-    val model = ALS.train(ratings,50,10,0.01)
-//    println(model.userFeatures.count())
-//    println(model.productFeatures.count())
-    //用户推荐
+    val model = ALS.trainImplicit(ratings,50,10,0.01,0.01)
+
     val predictedRating = model.predict(789,123)
     println(predictedRating)
     val topKRecs = model.recommendProducts(789,10)
@@ -131,9 +132,9 @@ object MovieLensModel {
     val imBroadcast = sc.broadcast(itemMatrix)
 
     val allRecs = model.userFeatures.map{case (userId,array)=>
-        val userVector = new DoubleMatrix(array)
-        val scores =imBroadcast.value.mmul(userVector)
-        val recommendedIds = scores.data.zipWithIndex.sortBy(-_._1).map(_._2+1).toSeq
+      val userVector = new DoubleMatrix(array)
+      val scores =imBroadcast.value.mmul(userVector)
+      val recommendedIds = scores.data.zipWithIndex.sortBy(-_._1).map(_._2+1).toSeq
       (userId,recommendedIds)
     }
 
@@ -141,8 +142,8 @@ object MovieLensModel {
 
     val k =10
     val MAPK = allRecs.join(userMovies).map{case (userId,(predicted,actualWithIds))=>
-        val actual = actualWithIds.map(_._2).toSeq
-        avgPrecisionK(actual,predicted,k)
+      val actual = actualWithIds.map(_._2).toSeq
+      avgPrecisionK(actual,predicted,k)
     }.reduce(_+_)/allRecs.count()
     println(s"Mean Average Precision at K =${MAPK}")
 
@@ -151,7 +152,5 @@ object MovieLensModel {
     val regressionMetrics = new RegressionMetrics(predictedAndTrue)
     println(s"Mean Squared Error = ${regressionMetrics.meanSquaredError}")
     println(s"Root Mean Squared Error = ${regressionMetrics.rootMeanSquaredError}")
-
-
   }
 }
